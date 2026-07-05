@@ -1,0 +1,11 @@
+{
+  "name": "Figma Wireframe Relay",
+  "id": "figma-wireframe-relay",
+  "api": "1.0.0",
+  "main": "src/code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["http://localhost:7765"]
+  }
+}

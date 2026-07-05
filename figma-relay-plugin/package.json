@@ -1,0 +1,13 @@
+{
+  "name": "figma-relay-plugin",
+  "version": "1.0.0",
+  "description": "Figma plugin that acts as a local HTTP relay for canvas commands",
+  "scripts": {
+    "build": "tsc --noEmit false",
+    "watch": "tsc --noEmit false --watch"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.97.0",
+    "typescript": "^5.4.5"
+  }
+}
