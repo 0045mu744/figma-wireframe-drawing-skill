@@ -335,7 +335,9 @@ function startHttpServer(): void {
   });
 
   app.get('/commands', (_req: Request, res: Response) => {
-    res.json(queue.filter(q => q.status === 'pending'));
+    // Return max 5 pending at a time to prevent plugin flooding
+    const pending = queue.filter(q => q.status === 'pending').slice(0, 5);
+    res.json(pending);
   });
 
   app.delete('/commands/:id', (req: Request, res: Response) => {

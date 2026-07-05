@@ -93,6 +93,9 @@ async function dispatch(cmd) {
     try {
         switch (cmd.type) {
             case 'ping': return {};
+            case 'create_page': return { figmaNodeId: await handleCreatePage(cmd) };
+            case 'switch_page': return { figmaNodeId: await handleSwitchPage(cmd) };
+            case 'list_components': return { figmaNodeId: await handleListComponents(cmd) };
             case 'create_frame': return { figmaNodeId: await handleCreateFrame(cmd) };
             case 'create_text': return { figmaNodeId: await handleCreateText(cmd) };
             case 'create_rectangle': return { figmaNodeId: await handleCreateRectangle(cmd) };
@@ -105,6 +108,46 @@ async function dispatch(cmd) {
     }
     catch (err) {
         return { error: String(err) };
+    }
+}
+// ─── Page management ─────────────────────────────────────────────────────────
+async function handleCreatePage(cmd) {
+    const page = figma.createPage();
+    page.name = cmd.name;
+    figma.currentPage = page;
+    nodeRegistry.clear();
+    return page.id;
+}
+async function handleSwitchPage(cmd) {
+    const page = figma.root.children.find(p => p.name === cmd.name);
+    if (!page)
+        throw new Error(`Page "${cmd.name}" not found`);
+    figma.currentPage = page;
+    nodeRegistry.clear();
+    return page.id;
+}
+// ─── List available library components ───────────────────────────────────────
+async function handleListComponents(cmd) {
+    var _a, _b;
+    const filter = (_b = (_a = cmd.filter) === null || _a === void 0 ? void 0 : _a.toLowerCase()) !== null && _b !== void 0 ? _b : '';
+    const results = [];
+    try {
+        // Get all available library components (from enabled team/community libraries)
+        const libs = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+        // For components, use the correct API
+        const compsByKey = [];
+        // Walk imported components already in this file
+        const localAndImported = figma.root.findAllWithCriteria({ types: ['COMPONENT', 'COMPONENT_SET'] });
+        for (const node of localAndImported) {
+            const n = node;
+            if (!filter || n.name.toLowerCase().includes(filter)) {
+                compsByKey.push({ key: n.key, name: n.name, libraryName: 'local' });
+            }
+        }
+        return JSON.stringify({ count: compsByKey.length, components: compsByKey.slice(0, 100) });
+    }
+    catch (e) {
+        return JSON.stringify({ error: String(e) });
     }
 }
 // ─── Plugin Entrypoint ────────────────────────────────────────────────────────

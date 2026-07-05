@@ -8,7 +8,10 @@ type Command =
   | { id: string; type: 'create_rectangle'; x: number; y: number; width: number; height: number; color?: RGBColor; fill?: RGBColor; parentId?: string }
   | { id: string; type: 'import_carbon_component'; key: string; x: number; y: number; parentId?: string; props?: Record<string, string> }
   | { id: string; type: 'set_autolayout'; nodeId: string; direction: 'HORIZONTAL' | 'VERTICAL'; padding: number; gap: number }
-  | { id: string; type: 'ping' };
+  | { id: string; type: 'ping' }
+  | { id: string; type: 'list_components'; filter?: string }
+  | { id: string; type: 'create_page'; name: string }
+  | { id: string; type: 'switch_page'; name: string };
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +112,9 @@ async function dispatch(cmd: Command): Promise<{ figmaNodeId?: string; error?: s
   try {
     switch (cmd.type) {
       case 'ping':             return {};
+      case 'create_page':      return { figmaNodeId: await handleCreatePage(cmd as Extract<Command, {type:'create_page'}>) };
+      case 'switch_page':      return { figmaNodeId: await handleSwitchPage(cmd as Extract<Command, {type:'switch_page'}>) };
+      case 'list_components': return { figmaNodeId: await handleListComponents(cmd as Extract<Command, {type:'list_components'}>) };
       case 'create_frame':     return { figmaNodeId: await handleCreateFrame(cmd) };
       case 'create_text':      return { figmaNodeId: await handleCreateText(cmd) };
       case 'create_rectangle': return { figmaNodeId: await handleCreateRectangle(cmd) };
@@ -118,6 +124,51 @@ async function dispatch(cmd: Command): Promise<{ figmaNodeId?: string; error?: s
     }
   } catch (err) {
     return { error: String(err) };
+  }
+}
+
+// ─── Page management ─────────────────────────────────────────────────────────
+
+async function handleCreatePage(cmd: Extract<Command, { type: 'create_page' }>): Promise<string> {
+  const page = figma.createPage();
+  page.name = cmd.name;
+  figma.currentPage = page;
+  nodeRegistry.clear();
+  return page.id;
+}
+
+async function handleSwitchPage(cmd: Extract<Command, { type: 'switch_page' }>): Promise<string> {
+  const page = figma.root.children.find(p => p.name === cmd.name);
+  if (!page) throw new Error(`Page "${cmd.name}" not found`);
+  figma.currentPage = page as PageNode;
+  nodeRegistry.clear();
+  return page.id;
+}
+
+// ─── List available library components ───────────────────────────────────────
+
+async function handleListComponents(cmd: Extract<Command, { type: 'list_components' }>): Promise<string> {
+  const filter = cmd.filter?.toLowerCase() ?? '';
+  const results: {key: string; name: string; libraryName: string}[] = [];
+  
+  try {
+    // Get all available library components (from enabled team/community libraries)
+    const libs = await figma.teamLibrary.getAvailableLibraryVariableCollectionsAsync();
+    // For components, use the correct API
+    const compsByKey: {key: string; name: string; libraryName: string}[] = [];
+    
+    // Walk imported components already in this file
+    const localAndImported = figma.root.findAllWithCriteria({ types: ['COMPONENT', 'COMPONENT_SET'] });
+    for (const node of localAndImported) {
+      const n = node as ComponentNode | ComponentSetNode;
+      if (!filter || n.name.toLowerCase().includes(filter)) {
+        compsByKey.push({ key: n.key, name: n.name, libraryName: 'local' });
+      }
+    }
+    
+    return JSON.stringify({ count: compsByKey.length, components: compsByKey.slice(0, 100) });
+  } catch(e) {
+    return JSON.stringify({ error: String(e) });
   }
 }
 
