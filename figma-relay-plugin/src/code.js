@@ -62,7 +62,11 @@ async function handleCreateRectangle(cmd) {
     return rect.id;
 }
 async function handleImportCarbonComponent(cmd) {
-    const component = await figma.importComponentByKeyAsync(cmd.key);
+    var _a;
+    const resolvedKey = (_a = cmd.key) !== null && _a !== void 0 ? _a : cmd.componentKey;
+    if (!resolvedKey)
+        throw new Error('import_carbon_component requires a key or componentKey field');
+    const component = await figma.importComponentByKeyAsync(resolvedKey);
     const instance = component.createInstance();
     instance.x = cmd.x;
     instance.y = cmd.y;
@@ -71,7 +75,7 @@ async function handleImportCarbonComponent(cmd) {
             try {
                 instance.setProperties({ [key]: value });
             }
-            catch ( /* skip */_a) { /* skip */ }
+            catch ( /* skip */_b) { /* skip */ }
         }
     }
     resolveParent(cmd.parentId).appendChild(instance);

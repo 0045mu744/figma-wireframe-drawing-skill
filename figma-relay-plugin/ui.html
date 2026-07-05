@@ -72,10 +72,12 @@
 
     function sendToPlugin(cmd) {
       return new Promise((resolve, reject) => {
+        // Carbon component imports can take up to 30s (network fetch from library)
+        const timeoutMs = cmd.type === 'import_carbon_component' ? 30000 : 6000;
         const timer = setTimeout(() => {
           pending.delete(cmd.id);
-          reject(new Error('timeout after 6s'));
-        }, 6000);
+          reject(new Error('timeout after ' + (timeoutMs/1000) + 's'));
+        }, timeoutMs);
         pending.set(cmd.id, {
           resolve: (v) => { clearTimeout(timer); resolve(v); },
           reject:  (e) => { clearTimeout(timer); reject(e); }

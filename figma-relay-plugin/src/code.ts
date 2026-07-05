@@ -6,7 +6,7 @@ type Command =
   | { id: string; type: 'create_frame'; name: string; x: number; y: number; width: number; height: number; parentId?: string }
   | { id: string; type: 'create_text'; text: string; x: number; y: number; fontSize: number; color: RGBColor; parentId?: string }
   | { id: string; type: 'create_rectangle'; x: number; y: number; width: number; height: number; color?: RGBColor; fill?: RGBColor; parentId?: string }
-  | { id: string; type: 'import_carbon_component'; key: string; x: number; y: number; parentId?: string; props?: Record<string, string> }
+  | { id: string; type: 'import_carbon_component'; key?: string; componentKey?: string; x: number; y: number; parentId?: string; props?: Record<string, string> }
   | { id: string; type: 'set_autolayout'; nodeId: string; direction: 'HORIZONTAL' | 'VERTICAL'; padding: number; gap: number }
   | { id: string; type: 'ping' }
   | { id: string; type: 'list_components'; filter?: string }
@@ -83,7 +83,9 @@ async function handleCreateRectangle(cmd: Extract<Command, { type: 'create_recta
 }
 
 async function handleImportCarbonComponent(cmd: Extract<Command, { type: 'import_carbon_component' }>): Promise<string> {
-  const component = await figma.importComponentByKeyAsync(cmd.key);
+  const resolvedKey = cmd.key ?? cmd.componentKey;
+  if (!resolvedKey) throw new Error('import_carbon_component requires a key or componentKey field');
+  const component = await figma.importComponentByKeyAsync(resolvedKey);
   const instance = component.createInstance();
   instance.x = cmd.x;
   instance.y = cmd.y;
