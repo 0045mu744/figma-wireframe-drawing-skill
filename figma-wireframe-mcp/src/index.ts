@@ -335,9 +335,14 @@ function startHttpServer(): void {
   });
 
   app.get('/commands', (_req: Request, res: Response) => {
-    // Return max 5 pending at a time to prevent plugin flooding
-    const pending = queue.filter(q => q.status === 'pending').slice(0, 5);
-    res.json(pending);
+    const pending = queue.filter(q => q.status === 'pending');
+    // If the next command is a Carbon import, return only that one — it blocks until Figma fetches from library
+    if (pending.length > 0 && pending[0].command.type === 'import_carbon_component') {
+      res.json([pending[0]]);
+    } else {
+      // For fast commands, return up to 5 at a time
+      res.json(pending.slice(0, 5));
+    }
   });
 
   app.delete('/commands/:id', (req: Request, res: Response) => {
