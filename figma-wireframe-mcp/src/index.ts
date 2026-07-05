@@ -316,6 +316,24 @@ function startHttpServer(): void {
   const app = express();
   app.use(express.json());
 
+  // CORS — Figma plugin UI iframe runs in https context; allow all origins for localhost dev
+  app.use((_req: Request, res: Response, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    if (_req.method === 'OPTIONS') { res.sendStatus(204); return; }
+    next();
+  });
+
+  // POST /commands — push a command into the queue (used by Bob directly via curl)
+  app.post('/commands', (req: Request, res: Response) => {
+    const cmd = req.body;
+    if (!cmd || !cmd.type) { res.status(400).json({ error: 'Missing command type' }); return; }
+    const id: string = cmd.id || (Math.random().toString(36).slice(2));
+    queue.push({ id, command: { ...cmd, id }, status: 'pending', queuedAt: Date.now() });
+    res.json({ ok: true, id });
+  });
+
   app.get('/commands', (_req: Request, res: Response) => {
     res.json(queue.filter(q => q.status === 'pending'));
   });

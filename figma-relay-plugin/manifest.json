@@ -6,6 +6,8 @@
   "ui": "ui.html",
   "editorType": ["figma"],
   "networkAccess": {
-    "allowedDomains": ["http://localhost:7765"]
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["http://localhost:7765"],
+    "reasoning": "This plugin polls a local MCP server on localhost:7765 to receive wireframe drawing commands from Bob (AI assistant). The local server queues commands and the plugin executes them on the Figma canvas."
   }
 }

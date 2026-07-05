@@ -2,187 +2,114 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Wireframe Relay</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-      font-size: 13px;
-      background: #ffffff;
-      color: #1f2328;
-      padding: 16px;
-      line-height: 1.5;
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      font-size: 13px; background: #fff; color: #1f2328; padding: 16px; line-height: 1.5;
     }
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .indicator {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #4caf50;
-      flex-shrink: 0;
-    }
-    .indicator.error { background: #f44336; }
-    .indicator.connecting { background: #ff9800; }
-    h2 {
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .status-row {
-      color: #57606a;
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-    .stat {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .stat:last-child { border-bottom: none; }
+    .header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #4caf50; flex-shrink: 0; }
+    .dot.err { background: #f44336; }
+    h2 { font-size: 14px; font-weight: 600; }
+    .sub { color: #57606a; font-size: 12px; margin-bottom: 8px; }
+    .stat { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #e5e7eb; }
     .stat-label { color: #57606a; }
     .stat-value { font-weight: 600; }
     .log {
-      margin-top: 12px;
-      background: #f7f8fa;
-      border: 1px solid #e5e7eb;
-      border-radius: 4px;
-      padding: 8px;
-      font-size: 11px;
-      font-family: "IBM Plex Mono", "SFMono-Regular", "Consolas", monospace;
-      color: #57606a;
-      height: 68px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
+      margin-top: 12px; background: #f7f8fa; border: 1px solid #e5e7eb;
+      border-radius: 4px; padding: 8px; font-size: 11px;
+      font-family: "SFMono-Regular", "Consolas", monospace;
+      color: #57606a; height: 120px; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-all;
     }
+    .log .err-line { color: #c0392b; font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="indicator" id="indicator"></div>
+    <div class="dot" id="dot"></div>
     <h2>Wireframe Relay</h2>
   </div>
-  <div class="status-row" id="status-text">Connecting to localhost:7765…</div>
-  <div class="stat">
-    <span class="stat-label">Commands executed</span>
-    <span class="stat-value" id="count-executed">0</span>
-  </div>
-  <div class="stat">
-    <span class="stat-label">Errors</span>
-    <span class="stat-value" id="count-errors">0</span>
-  </div>
-  <div class="log" id="log">Waiting for commands…</div>
+  <div class="sub" id="status-text">Connecting…</div>
+  <div class="stat"><span class="stat-label">Commands executed</span><span class="stat-value" id="cnt-ok">0</span></div>
+  <div class="stat"><span class="stat-label">Errors</span><span class="stat-value" id="cnt-err">0</span></div>
+  <div class="log" id="log">Waiting…</div>
 
   <script>
-    const RELAY_URL = 'http://localhost:7765';
-    const POLL_INTERVAL_MS = 500;
-
-    let countExecuted = 0;
-    let countErrors = 0;
-    let connected = false;
-
-    const indicator = document.getElementById('indicator');
-    const statusText = document.getElementById('status-text');
-    const countExecutedEl = document.getElementById('count-executed');
-    const countErrorsEl = document.getElementById('count-errors');
+    const BASE = 'http://localhost:7765';
+    let ok = 0, errs = 0, connected = false;
+    const dot = document.getElementById('dot');
+    const statusEl = document.getElementById('status-text');
+    const okEl = document.getElementById('cnt-ok');
+    const errEl = document.getElementById('cnt-err');
     const logEl = document.getElementById('log');
 
-    function setConnected(ok) {
-      connected = ok;
-      indicator.className = 'indicator' + (ok ? '' : ' error');
-      statusText.textContent = ok
-        ? 'Relay active — polling localhost:7765'
-        : 'Relay unreachable — retrying…';
+    function setConnected(v) {
+      connected = v;
+      dot.className = 'dot' + (v ? '' : ' err');
+      statusEl.textContent = v ? 'Relay active — polling localhost:7765' : 'Relay unreachable — retrying…';
     }
 
-    function appendLog(msg) {
-      const now = new Date().toLocaleTimeString('en-US', { hour12: false });
-      logEl.textContent = '[' + now + '] ' + msg + '\n' + logEl.textContent;
+    function log(msg, isErr) {
+      const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const line = document.createElement('div');
+      if (isErr) line.className = 'err-line';
+      line.textContent = '[' + t + '] ' + msg;
+      logEl.insertBefore(line, logEl.firstChild);
     }
 
-    // ── Pending result promises: commandId → { resolve, reject } ──────────────
     const pending = new Map();
-
-    // Receive results back from code.ts
-    window.onmessage = function(event) {
-      const msg = event.data.pluginMessage;
-      if (!msg) return;
-      if (msg.type === 'command_result') {
-        const p = pending.get(msg.id);
-        if (p) {
-          pending.delete(msg.id);
-          if (msg.error) {
-            p.reject(new Error(msg.error));
-          } else {
-            p.resolve(msg.figmaNodeId);
-          }
-        }
+    window.onmessage = function(e) {
+      const m = e.data.pluginMessage;
+      if (!m) return;
+      if (m.type === 'command_result') {
+        const p = pending.get(m.id);
+        if (p) { pending.delete(m.id); m.error ? p.reject(new Error(m.error)) : p.resolve(m.figmaNodeId); }
       }
     };
 
-    function sendToPlugin(command) {
-      return new Promise(function(resolve, reject) {
-        pending.set(command.id, { resolve, reject });
-        parent.postMessage({ pluginMessage: { type: 'execute_command', command } }, '*');
+    function sendToPlugin(cmd) {
+      return new Promise((resolve, reject) => {
+        pending.set(cmd.id, { resolve, reject });
+        parent.postMessage({ pluginMessage: { type: 'execute_command', command: cmd } }, '*');
       });
     }
 
-    async function processCommands(commands) {
-      for (const cmd of commands) {
+    async function processCommands(cmds) {
+      // Server returns QueuedCommand {id, command, status} — extract inner command
+      for (const item of cmds) {
+        // Server returns QueuedCommand {id, command:{...}, status} — use inner command
+        const cmd = item.command || item;
+        const qid = item.id || cmd.id;
         try {
-          appendLog('▶ ' + cmd.type + ' (' + cmd.id.slice(0, 8) + '…)');
+          log('▶ ' + cmd.type + ' [' + qid.slice(0,8) + ']');
           await sendToPlugin(cmd);
-
-          // ACK — delete from server queue
-          await fetch(RELAY_URL + '/commands/' + cmd.id, { method: 'DELETE' });
-
-          countExecuted++;
-          countExecutedEl.textContent = String(countExecuted);
-          appendLog('✓ ' + cmd.type + ' done');
-        } catch (err) {
-          countErrors++;
-          countErrorsEl.textContent = String(countErrors);
-          appendLog('✗ ' + cmd.type + ': ' + String(err));
-          // Still attempt to ACK so the command doesn't get stuck in the queue
-          try {
-            await fetch(RELAY_URL + '/commands/' + cmd.id, { method: 'DELETE' });
-          } catch (_) {}
+          await fetch(BASE + '/commands/' + qid, { method: 'DELETE' });
+          ok++; okEl.textContent = ok;
+          log('✓ ' + cmd.type);
+        } catch(err) {
+          errs++; errEl.textContent = errs;
+          log('✗ ' + cmd.type + ': ' + String(err), true);
+          try { await fetch(BASE + '/commands/' + qid, { method: 'DELETE' }); } catch(_) {}
         }
       }
     }
 
     async function poll() {
       try {
-        const res = await fetch(RELAY_URL + '/commands', {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' }
-        });
-
-        if (!res.ok) {
-          setConnected(false);
-          return;
-        }
-
-        if (!connected) setConnected(true);
-
-        const commands = await res.json();
-        if (Array.isArray(commands) && commands.length > 0) {
-          await processCommands(commands);
-        }
-      } catch (_) {
+        const res = await fetch(BASE + '/commands', { headers: { Accept: 'application/json' } });
+        if (!res.ok) { setConnected(false); return; }
+        if (!connected) { setConnected(true); log('Connected to relay server'); }
+        const cmds = await res.json();
+        if (Array.isArray(cmds) && cmds.length > 0) await processCommands(cmds);
+      } catch(e) {
         setConnected(false);
       }
     }
 
-    // Start polling
-    setInterval(poll, POLL_INTERVAL_MS);
-    poll(); // immediate first poll
+    poll().then(() => setInterval(poll, 500));
   </script>
 </body>
 </html>
